@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ClinicQ — Booking Confirmation</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header>
+    <div class="header-icon">🏥</div>
+    <span class="header-title">ClinicQ</span>
+    <span class="header-sub">Booking Confirmation</span>
+    <a href="index.html" class="view-link">← New Booking</a>
+  </header>
+
+  <main class="page">
+    <section class="card" id="confirmationCard" style="display:none;">
+      <h1 class="card-title"><span>🎫</span> Your Booking Details</h1>
+      
+      <div class="booking-details" style="font-size: 0.9rem; line-height: 1.8; margin-bottom: 20px;">
+        <p><b>Name:</b> <span id="confName"></span></p>
+        <p><b>Doctor:</b> <span id="confDoctor"></span></p>
+        <p><b>Date:</b> <span id="confDate"></span></p>
+        <p><b>Time Slot:</b> <span id="confSlot"></span></p>
+        <p><b>Token:</b> <span id="confToken" style="font-size: 1.2rem; font-weight: bold; color: var(--teal);"></span></p>
+        <p><b>Status:</b> <span id="confStatus" class="status-badge" style="display: inline-block; padding: 4px 10px;"></span></p>
+      </div>
+
+      <div class="action-row">
+        <a id="downloadPdfBtn" href="#" target="_blank" class="btn btn-primary" style="display: none;">📄 Download PDF</a>
+        <button id="cancelBookingBtn" class="btn btn-danger">❌ Cancel Booking</button>
+      </div>
+    </section>
+    
+    <div id="loadingState" style="text-align: center; padding: 40px; color: var(--muted);">
+      <span class="spinner"></span> Loading booking details...
+    </div>
+    
+    <div id="errorState" style="display:none; text-align: center; padding: 40px; color: var(--danger);">
+      <p>Booking not found. Please try booking again.</p>
+    </div>
+  </main>
+
+  <div id="toast" role="alert"></div>
+  <script src="script.js"></script>
+</body>
+</html>

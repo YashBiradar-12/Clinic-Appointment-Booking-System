@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ClinicQ — Admin Panel</title>
+  <meta name="description" content="Admin panel to manage clinic bookings and patient queue." />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header>
+    <div class="header-icon">🩺</div>
+    <span class="header-title">ClinicQ Admin</span>
+    <span class="header-sub" id="liveDate"></span>
+    <a href="index.html" class="view-link">← Patient Booking</a>
+  </header>
+
+  <main class="page wide">
+
+    <!-- ── Stats ──────────────────────────────────────────────────────────────── -->
+    <div class="stats-bar">
+      <div class="stat-chip">
+        <div class="stat-number" id="statTotal">0</div>
+        <div class="stat-label">Total</div>
+      </div>
+      <div class="stat-chip">
+        <div class="stat-number" id="statPending" style="color:var(--warning)">0</div>
+        <div class="stat-label">Pending</div>
+      </div>
+      <div class="stat-chip">
+        <div class="stat-number" id="statConfirmed" style="color:var(--success)">0</div>
+        <div class="stat-label">Confirmed</div>
+      </div>
+      <div class="stat-chip">
+        <div class="stat-number" id="statRejected" style="color:var(--danger)">0</div>
+        <div class="stat-label">Rejected</div>
+      </div>
+    </div>
+
+    <!-- ── Admin Actions ──────────────────────────────────────────────────────── -->
+    <div class="action-row">
+      <button class="btn btn-danger" id="callNextBtn">📢 Call Next Patient</button>
+      <button class="btn btn-warning" id="resetBtn">🔄 Reset All</button>
+    </div>
+
+    <!-- ── Tabs ───────────────────────────────────────────────────────────────── -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="pending">
+        ⏳ Pending <span class="tab-count pending" id="countPending">0</span>
+      </button>
+      <button class="tab-btn" data-tab="confirmed">
+        ✅ Confirmed <span class="tab-count confirmed" id="countConfirmed">0</span>
+      </button>
+      <button class="tab-btn" data-tab="rejected">
+        ❌ Rejected <span class="tab-count rejected" id="countRejected">0</span>
+      </button>
+    </div>
+
+    <!-- ── Bookings Panel ──────────────────────────────────────────────────────── -->
+    <section class="card">
+      <ul class="bookings-list" id="bookingsList" aria-live="polite"></ul>
+    </section>
+
+  </main>
+
+  <div id="toast" role="alert"></div>
+  <script src="script.js"></script>
+</body>
+</html>

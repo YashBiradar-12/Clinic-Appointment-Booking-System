@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ClinicQ — Book Appointment</title>
+  <meta name="description" content="Book your clinic appointment and choose your doctor and time slot." />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header>
+    <div class="header-icon">🏥</div>
+    <span class="header-title">ClinicQ</span>
+    <span class="header-sub">Patient Portal</span>
+    <a href="admin.html" class="view-link">Admin Panel →</a>
+  </header>
+
+  <main class="page">
+
+    <!-- ── Booking Form ───────────────────────────────────────────────────────── -->
+    <section class="card">
+      <h1 class="card-title"><span>📋</span> Book Your Appointment</h1>
+
+      <form id="bookingForm" novalidate>
+        <div class="form-grid">
+
+          <!-- Name -->
+          <div class="form-group">
+            <label for="patientName">Full Name</label>
+            <input type="text" id="patientName" placeholder="e.g. Anjali Mehta" required autocomplete="off" />
+          </div>
+
+          <!-- Age -->
+          <div class="form-group">
+            <label for="patientAge">Age</label>
+            <input type="number" id="patientAge" placeholder="e.g. 28" min="1" max="120" required />
+          </div>
+
+          <!-- Phone -->
+          <div class="form-group">
+            <label for="patientPhone">Phone Number</label>
+            <input type="tel" id="patientPhone" placeholder="10-digit number" maxlength="10" required />
+          </div>
+
+          <!-- Date -->
+          <div class="form-group">
+            <label for="appointmentDate">Appointment Date</label>
+            <input type="date" id="appointmentDate" required />
+          </div>
+
+          <!-- Doctor -->
+          <div class="form-group">
+            <label for="doctorSelect">Select Doctor</label>
+            <select id="doctorSelect" required>
+              <option value="" disabled selected>Loading doctors...</option>
+            </select>
+          </div>
+
+          <!-- Time Slot -->
+          <div class="form-group">
+            <label for="timeSlot">Time Slot</label>
+            <select id="timeSlot" required>
+              <option value="" disabled selected>Select a slot</option>
+              <option value="9:00–10:00">🕘  9:00 – 10:00 AM</option>
+              <option value="10:00–11:00">🕙 10:00 – 11:00 AM</option>
+              <option value="11:00–12:00">🕚 11:00 – 12:00 PM</option>
+            </select>
+          </div>
+
+          <!-- Problem (full width) -->
+          <div class="form-group full">
+            <label for="patientProblem">Problem / Complaint</label>
+            <textarea id="patientProblem" placeholder="Briefly describe your issue..." required></textarea>
+          </div>
+
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="submitBtn">
+          ➕ Book Appointment
+        </button>
+      </form>
+    </section>
+
+  </main>
+
+  <div id="toast" role="alert"></div>
+  <script src="script.js"></script>
+</body>
+</html>
