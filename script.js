@@ -21,17 +21,23 @@ if (form) {
   const docSelect = document.getElementById("doctorSelect");
   // Removed banner references as we redirect to confirmation page
 
-  async function loadDoctors() {
-    try {
-      const res = await fetch("/doctors");
-      const docs = await res.json();
-      docSelect.innerHTML = `<option value="" disabled selected>Select a doctor</option>`;
-      docs.forEach(d => {
-        docSelect.innerHTML += `<option value="${d.name}">${d.name} (${d.specialization})</option>`;
-      });
-    } catch (e) {
-      showToast("Failed to load doctors.", "error");
-    }
+  // Static doctors data - no API call needed
+  const doctors = [
+    "Dr. Priya Sharma (General Physician)",
+    "Dr. Arjun Mehta (Orthopedics)",
+    "Dr. Sneha Rao (Dermatology)",
+    "Dr. Vikram Nair (Cardiology)"
+  ];
+
+  // Populate doctors dropdown from static data
+  function loadDoctors() {
+    docSelect.innerHTML = `<option value="" disabled selected>Select a doctor</option>`;
+    doctors.forEach(doctor => {
+      const option = document.createElement("option");
+      option.value = doctor;
+      option.textContent = doctor;
+      docSelect.appendChild(option);
+    });
   }
   loadDoctors();
 
