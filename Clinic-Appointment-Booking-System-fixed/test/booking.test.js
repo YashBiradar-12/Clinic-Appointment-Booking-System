@@ -1,6 +1,14 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 
 process.env.ADMIN_PASSWORD = "qa-test-password-2026";
+process.env.BOOKINGS_FILE = path.join(
+  os.tmpdir(),
+  `clinicq-bookings-${process.pid}-${Date.now()}.json`
+);
+try { fs.rmSync(process.env.BOOKINGS_FILE, { force: true }); } catch {}
 const app = require("../server");
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
@@ -59,7 +67,7 @@ async function createBooking(overrides) {
 
 async function runTest(name, callback) {
   const { response } = await request("/reset", { method: "POST", admin: true });
-  assert.equal(response.status, 200, "test setup could not clear its in-memory data");
+  assert.equal(response.status, 200, "test setup could not clear persistent test data");
   await callback();
   console.log(`PASS ${name}`);
 }
@@ -243,6 +251,34 @@ async function main() {
       assert.equal(result.response.status, 400);
       assert.equal(result.body.error, "Invalid JSON request body.");
       assert.equal(JSON.stringify(result.body).includes("server.js"), false);
+    }],
+    ["bookings persist across a server restart", async () => {
+      const input = bookingData({ date: localDate(4), timeSlot: "10:15–10:30" });
+      const created = await request("/addPatient", { method: "POST", body: input });
+      assert.equal(created.response.status, 201);
+      const bookingId = created.body.booking.id;
+
+      await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+
+      delete require.cache[require.resolve("../server")];
+      const restartedApp = require("../server");
+      server = restartedApp.listen(0, "127.0.0.1");
+      await new Promise((resolve, reject) => {
+        server.once("listening", resolve);
+        server.once("error", reject);
+      });
+      baseUrl = `http://127.0.0.1:${server.address().port}`;
+
+      const afterRestart = await request("/booking/" + bookingId, {
+        bookingToken: created.body.accessToken,
+      });
+      assert.equal(afterRestart.response.status, 200);
+      assert.equal(afterRestart.body.id, bookingId);
+      assert.equal(afterRestart.body.status, "pending");
+
+      const adminBookings = await request("/bookings", { admin: true });
+      assert.equal(adminBookings.response.status, 200);
+      assert.equal(adminBookings.body.some(booking => booking.id === bookingId), true);
     }],
   ];
 

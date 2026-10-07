@@ -1,7 +1,7 @@
 {
   "name": "clinic-booking-system",
-  "version": "2.0.0",
-  "description": "Clinic booking & queue management — in-memory with PDF support",
+  "version": "2.1.0",
+  "description": "Clinic booking and queue management with persistent JSON storage and PDF support",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

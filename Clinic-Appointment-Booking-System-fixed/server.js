@@ -3,6 +3,7 @@
 const express = require("express");
 const crypto  = require("crypto");
 const PDFDoc  = require("pdfkit");
+const { loadState, saveState, resetState } = require("./database");
 
 const app  = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -13,12 +14,44 @@ const ADMIN_PASSWORD_MIN_LENGTH = 12;
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: false, limit: "16kb" }));
+
+// Optional CORS for a separately hosted static frontend (e.g. GitHub Pages).
+// Set CORS_ORIGIN to the exact frontend origin, or a comma-separated list.
+const CORS_ORIGINS = (process.env.CORS_ORIGIN || "")
+  .split(",")
+  .map(origin => origin.trim())
+  .filter(Boolean);
+
+app.use((req, res, next) => {
+  const origin = req.get("origin");
+  if (origin && CORS_ORIGINS.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Booking-Token");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+  }
+  if (req.method === "OPTIONS" && origin && CORS_ORIGINS.includes(origin)) {
+    return res.sendStatus(204);
+  }
+  next();
+});
+
 app.use(express.static(__dirname));
 
-// ─── In-Memory Storage ────────────────────────────────────────────────────────
-let bookings  = [];   // All bookings
-let nextToken = 1;    // Auto-incrementing token
-let nextId    = 1;    // Auto-incrementing booking ID
+// ─── Persistent Storage ───────────────────────────────────────────────────────
+// Bookings survive server restarts. The default store is data/bookings.json;
+// set BOOKINGS_FILE to use a different location (useful for tests/deployment).
+let state = loadState();
+let bookings = state.bookings;
+let nextToken = state.nextToken;
+let nextId = state.nextId;
+
+function persistState() {
+  state = saveState({ bookings, nextToken, nextId });
+  bookings = state.bookings;
+  nextToken = state.nextToken;
+  nextId = state.nextId;
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const DOCTORS = [
@@ -249,6 +282,15 @@ app.post("/addPatient", (req, res) => {
   };
 
   bookings.push(booking);
+  try {
+    persistState();
+  } catch (error) {
+    bookings.pop();
+    nextId -= 1;
+    nextToken -= 1;
+    console.error(error);
+    return res.status(500).json({ error: "Booking could not be saved. Please try again." });
+  }
 
   res.status(201).json({
     message: "Booking submitted! Your status is Pending. Please wait for confirmation.",
@@ -265,7 +307,15 @@ app.post("/confirm/:id", requireAdmin, (req, res) => {
     return res.status(409).json({ error: "Only pending bookings can be confirmed." });
   }
 
+  const previousStatus = booking.status;
   booking.status = "confirmed";
+  try {
+    persistState();
+  } catch (error) {
+    booking.status = previousStatus;
+    console.error(error);
+    return res.status(500).json({ error: "Booking could not be updated. Please try again." });
+  }
 
   // Simulated SMS notification
   sendSMS(
@@ -284,7 +334,15 @@ app.post("/reject/:id", requireAdmin, (req, res) => {
     return res.status(409).json({ error: "Only pending bookings can be rejected." });
   }
 
+  const previousStatus = booking.status;
   booking.status = "rejected";
+  try {
+    persistState();
+  } catch (error) {
+    booking.status = previousStatus;
+    console.error(error);
+    return res.status(500).json({ error: "Booking could not be updated. Please try again." });
+  }
 
   // Simulated SMS notification
   sendSMS(
@@ -314,7 +372,15 @@ app.post("/cancel/:id", (req, res) => {
     return res.status(409).json({ error: "Only pending or confirmed bookings can be cancelled." });
   }
 
+  const previousStatus = booking.status;
   booking.status = "cancelled";
+  try {
+    persistState();
+  } catch (error) {
+    booking.status = previousStatus;
+    console.error(error);
+    return res.status(500).json({ error: "Booking could not be cancelled. Please try again." });
+  }
   res.json({ message: "Booking cancelled successfully.", booking: publicBooking(booking) });
 });
 
@@ -324,7 +390,14 @@ app.delete("/next", requireAdmin, (req, res) => {
   if (idx === -1) {
     return res.status(404).json({ error: "No confirmed patients in queue." });
   }
-  const called = bookings.splice(idx, 1)[0];
+  const [called] = bookings.splice(idx, 1);
+  try {
+    persistState();
+  } catch (error) {
+    bookings.splice(idx, 0, called);
+    console.error(error);
+    return res.status(500).json({ error: "Patient could not be called. Please try again." });
+  }
   res.json({
     message: `Patient "${called.name}" (Token #${called.token}) has been called.`,
     called: publicBooking(called),
@@ -410,11 +483,17 @@ app.post("/pdf/:id", sendBookingPdf);
 
 // POST /reset — Wipe all bookings and reset counters
 app.post("/reset", requireAdmin, (req, res) => {
-  bookings  = [];
-  nextToken = 1;
-  nextId    = 1;
-  console.log("🔁 All bookings have been reset.");
-  res.json({ message: "All bookings have been reset successfully." });
+  try {
+    const newState = resetState();
+    bookings = newState.bookings;
+    nextToken = newState.nextToken;
+    nextId = newState.nextId;
+    console.log("🔁 All bookings have been reset.");
+    res.json({ message: "All bookings have been reset successfully." });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Bookings could not be reset. Please try again." });
+  }
 });
 
 app.use((err, req, res, next) => {

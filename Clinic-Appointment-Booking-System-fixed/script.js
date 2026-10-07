@@ -1,28 +1,69 @@
-// script.js — Patient Portal & Admin Panel Logic (v2)
+// script.js — ClinicQ patient portal, confirmation page, and admin panel.
+
+const API_BASE_URL = String(window.CLINICQ_API_BASE_URL || "").replace(/\/+$/, "");
+
+function apiUrl(path) {
+  return `${API_BASE_URL}${path}`;
+}
+
+async function apiJson(path, options = {}) {
+  let response;
+  try {
+    response = await fetch(apiUrl(path), options);
+  } catch {
+    throw new Error("Unable to reach the ClinicQ server. Check the backend URL and that the server is running.");
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  const raw = await response.text();
+  let data = null;
+
+  if (raw) {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      if (!contentType.includes("application/json")) {
+        throw new Error(
+          `ClinicQ backend returned ${response.status} ${response.statusText || "without JSON data"}. Check the configured API URL.`
+        );
+      }
+      throw new Error("ClinicQ backend returned invalid JSON.");
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.error || `Request failed with HTTP ${response.status}.`);
+  }
+
+  return { response, data };
+}
 
 // --- Shared Toast ---
 let tTimer;
-function showToast(msg, type="info") {
+function showToast(msg, type = "info") {
   const toast = document.getElementById("toast");
   if (!toast) return;
-  const icons = { success:"✅", error:"❌", info:"ℹ️", warn:"⚠️" };
+  const icons = { success: "✅", error: "❌", info: "ℹ️", warn: "⚠️" };
   const icon = document.createElement("span");
   icon.textContent = icons[type] || icons.info;
   toast.replaceChildren(icon, document.createTextNode(` ${msg}`));
   toast.className = `show ${type}`;
   clearTimeout(tTimer);
-  tTimer = setTimeout(() => toast.className="", 3500);
+  tTimer = setTimeout(() => { toast.className = ""; }, 3500);
 }
 
 // ==========================================
 // PATIENT PORTAL LOGIC
 // ==========================================
 const form = document.getElementById("bookingForm");
+
 if (form) {
-  const btn  = document.getElementById("submitBtn");
+  const btn = document.getElementById("submitBtn");
   const docSelect = document.getElementById("doctorSelect");
   const dateInput = document.getElementById("appointmentDate");
   const slotSelect = document.getElementById("timeSlot");
+  let availabilityRequest = 0;
+
   function formatSlotLabel(timeSlot) {
     return timeSlot.split("–").map(time => {
       const [hour, minute] = time.split(":").map(Number);
@@ -31,7 +72,6 @@ if (form) {
       return `${displayHour}:${String(minute).padStart(2, "0")} ${period}`;
     }).join(" – ");
   }
-  let availabilityRequest = 0;
 
   function localDateString(date) {
     const year = date.getFullYear();
@@ -45,19 +85,20 @@ if (form) {
   async function loadAvailability() {
     const requestId = ++availabilityRequest;
     slotSelect.replaceChildren(new Option("Select a date and doctor first", "", true, true));
+
     if (!dateInput.value || !docSelect.value) return;
 
     try {
-      const query = new URLSearchParams({ doctor: docSelect.value, date: dateInput.value });
-      const response = await fetch(`/availability?${query}`);
-      const data = await response.json();
+      const query = new URLSearchParams({
+        doctor: docSelect.value,
+        date: dateInput.value,
+      });
+      const { data } = await apiJson(`/availability?${query}`);
       if (requestId !== availabilityRequest) return;
-      if (!response.ok) throw new Error(data.error || "Unable to load available times.");
 
-      const placeholder = data.availableSlots.length
-        ? "Select a slot"
-        : "No slots available";
+      const placeholder = data.availableSlots.length ? "Select a slot" : "No slots available";
       slotSelect.replaceChildren(new Option(placeholder, "", true, true));
+
       data.availableSlots.forEach(timeSlot => {
         const option = document.createElement("option");
         option.value = timeSlot;
@@ -72,58 +113,65 @@ if (form) {
   }
 
   async function loadDoctors() {
-    const response = await fetch("/doctors");
-    const doctors = await response.json();
-    if (!response.ok) throw new Error(doctors.error || "Unable to load doctors.");
+    try {
+      const { data: doctors } = await apiJson("/doctors");
+      docSelect.replaceChildren(new Option("Select a doctor", "", true, true));
 
-    docSelect.replaceChildren(new Option("Select a doctor", "", true, true));
-    doctors.forEach(doctor => {
-      const option = document.createElement("option");
-      option.value = doctor.name;
-      option.textContent = `${doctor.name} (${doctor.specialization})`;
-      docSelect.appendChild(option);
-    });
+      doctors.forEach(doctor => {
+        const option = document.createElement("option");
+        option.value = doctor.name;
+        option.textContent = `${doctor.name} (${doctor.specialization})`;
+        docSelect.appendChild(option);
+      });
+    } catch (error) {
+      docSelect.replaceChildren(new Option("Doctors unavailable", "", true, true));
+      showToast(error.message || "Unable to load doctors.", "error");
+    }
   }
-  loadDoctors().catch(error => {
-    docSelect.replaceChildren(new Option("Doctors unavailable", "", true, true));
-    showToast(error.message, "error");
-  });
+
+  loadDoctors();
   docSelect.addEventListener("change", loadAvailability);
   dateInput.addEventListener("change", loadAvailability);
 
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
 
-    const name  = document.getElementById("patientName").value;
-    const age   = document.getElementById("patientAge").value;
-    const phone = document.getElementById("patientPhone").value;
-    const date  = document.getElementById("appointmentDate").value;
-    const doc   = document.getElementById("doctorSelect").value;
-    const slot  = document.getElementById("timeSlot").value;
-    const prob  = document.getElementById("patientProblem").value;
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
+
+    const name = document.getElementById("patientName").value.trim();
+    const age = Number(document.getElementById("patientAge").value);
+    const phone = document.getElementById("patientPhone").value.trim();
+    const date = dateInput.value;
+    const doctor = docSelect.value;
+    const timeSlot = slotSelect.value;
+    const problem = document.getElementById("patientProblem").value.trim();
+
+    if (!doctor || !timeSlot) {
+      showToast("Please select a doctor and available time slot.", "error");
+      return;
+    }
 
     btn.disabled = true;
     btn.innerHTML = `<span class="spinner"></span> Booking...`;
 
     try {
-      const res = await fetch("/addPatient", {
+      const { data } = await apiJson("/addPatient", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, age:Number(age), phone, date, doctor:doc, timeSlot:slot, problem:prob })
+        body: JSON.stringify({ name, age, phone, date, doctor, timeSlot, problem }),
       });
-      const data = await res.json();
-
-      if (!res.ok) throw new Error(data.error || "Booking could not be completed.");
 
       localStorage.setItem("bookingId", data.booking.id);
       localStorage.setItem("bookingAccessToken", data.accessToken);
-      window.location.href = "confirmation.html";
-
-    } catch (err) {
-      showToast(err.message || "Booking could not be completed.", "error");
+      window.location.href = new URL("confirmation.html", window.location.href).href;
+    } catch (error) {
+      showToast(error.message || "Booking could not be completed.", "error");
     } finally {
       btn.disabled = false;
-      btn.innerHTML = `➕ Book Appointment`;
+      btn.innerHTML = "➕ Book Appointment";
     }
   });
 }
@@ -132,6 +180,7 @@ if (form) {
 // ADMIN PANEL LOGIC
 // ==========================================
 const adminLoginForm = document.getElementById("adminLoginForm");
+
 if (adminLoginForm) {
   const loginPanel = document.getElementById("adminLogin");
   const adminPanel = document.getElementById("adminPanel");
@@ -143,7 +192,7 @@ if (adminLoginForm) {
   function authorizationHeader(password) {
     const bytes = new TextEncoder().encode(`admin:${password}`);
     let binary = "";
-    bytes.forEach(byte => binary += String.fromCharCode(byte));
+    bytes.forEach(byte => { binary += String.fromCharCode(byte); });
     return `Basic ${btoa(binary)}`;
   }
 
@@ -152,11 +201,13 @@ if (adminLoginForm) {
   }
 
   async function signIn(password) {
-    const response = await fetch("/admin/session", {
+    const { data } = await apiJson("/admin/session", {
       headers: { Authorization: authorizationHeader(password) },
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Admin sign in failed.");
+
+    if (!data.authenticated) {
+      throw new Error("Admin sign in failed.");
+    }
 
     adminPassword = password;
     loginError.textContent = "";
@@ -169,6 +220,7 @@ if (adminLoginForm) {
     event.preventDefault();
     loginButton.disabled = true;
     loginError.textContent = "";
+
     try {
       await signIn(document.getElementById("adminPassword").value);
     } catch (error) {
@@ -183,9 +235,11 @@ if (adminLoginForm) {
     const tabs = document.querySelectorAll(".tab-btn");
     let currentTab = "pending";
 
-    const liveDate = document.getElementById("liveDate");
-    liveDate.textContent = new Date().toLocaleDateString("en-IN", {
-      weekday:"short", day:"numeric", month:"short", year:"numeric"
+    document.getElementById("liveDate").textContent = new Date().toLocaleDateString("en-IN", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
     });
 
     tabs.forEach(button => {
@@ -197,12 +251,13 @@ if (adminLoginForm) {
       });
     });
 
-    async function action(url, method="POST") {
+    async function action(path, method = "POST") {
       try {
-        const response = await fetch(url, { method, headers: adminHeaders() });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Admin action failed.");
-        showToast(data.message, "success");
+        const { data } = await apiJson(path, {
+          method,
+          headers: adminHeaders(),
+        });
+        showToast(data.message || "Action completed.", "success");
         await loadBookings();
       } catch (error) {
         showToast(error.message || "Admin action failed.", "error");
@@ -221,9 +276,9 @@ if (adminLoginForm) {
 
     async function loadBookings() {
       try {
-        const response = await fetch("/bookings", { headers: adminHeaders() });
-        const all = await response.json();
-        if (!response.ok) throw new Error(all.error || "Failed to load bookings.");
+        const { data: all } = await apiJson("/bookings", {
+          headers: adminHeaders(),
+        });
 
         const counts = {
           total: all.length,
@@ -232,15 +287,20 @@ if (adminLoginForm) {
           rejected: all.filter(booking => booking.status === "rejected").length,
           cancelled: all.filter(booking => booking.status === "cancelled").length,
         };
+
         Object.entries(counts).forEach(([status, count]) => {
-          document.getElementById(`stat${status[0].toUpperCase()}${status.slice(1)}`).textContent = count;
+          const stat = document.getElementById(`stat${status[0].toUpperCase()}${status.slice(1)}`);
+          if (stat) stat.textContent = count;
+
           if (status !== "total") {
-            document.getElementById(`count${status[0].toUpperCase()}${status.slice(1)}`).textContent = count;
+            const tabCount = document.getElementById(`count${status[0].toUpperCase()}${status.slice(1)}`);
+            if (tabCount) tabCount.textContent = count;
           }
         });
 
         list.replaceChildren();
         const filtered = all.filter(booking => booking.status === currentTab);
+
         if (filtered.length === 0) {
           const empty = document.createElement("li");
           empty.className = "empty-state";
@@ -255,6 +315,7 @@ if (adminLoginForm) {
             : "unknown";
           const doctorName = booking.doctor?.name || "Unknown doctor";
           const specialization = booking.doctor?.specialization || "Unknown specialization";
+
           const card = document.createElement("li");
           card.className = "booking-card";
           card.innerHTML = `
@@ -274,6 +335,7 @@ if (adminLoginForm) {
             </div>
             <div class="booking-actions"></div>
           `;
+
           const actions = card.querySelector(".booking-actions");
           if (status === "pending") {
             const confirmButton = document.createElement("button");
@@ -285,8 +347,10 @@ if (adminLoginForm) {
             rejectButton.className = "btn btn-sm btn-danger";
             rejectButton.textContent = "❌ Reject";
             rejectButton.addEventListener("click", () => action(`/reject/${booking.id}`));
+
             actions.append(confirmButton, rejectButton);
           }
+
           list.appendChild(card);
         });
       } catch (error) {
@@ -295,9 +359,13 @@ if (adminLoginForm) {
     }
 
     document.getElementById("callNextBtn").addEventListener("click", () => action("/next", "DELETE"));
+
     document.getElementById("resetBtn").addEventListener("click", () => {
-      if (confirm("Reset ALL bookings? This cannot be undone.")) action("/reset");
+      if (confirm("Reset ALL bookings? This cannot be undone.")) {
+        action("/reset");
+      }
     });
+
     document.getElementById("logoutBtn").addEventListener("click", () => {
       adminPassword = "";
       clearInterval(refreshTimer);
@@ -313,84 +381,89 @@ if (adminLoginForm) {
 // CONFIRMATION PAGE LOGIC
 // ==========================================
 const confCard = document.getElementById("confirmationCard");
+
 if (confCard) {
   const loadBooking = async () => {
     const id = localStorage.getItem("bookingId");
     const accessToken = localStorage.getItem("bookingAccessToken");
+
     if (!id || !accessToken) {
       document.getElementById("loadingState").style.display = "none";
       document.getElementById("errorState").style.display = "block";
       return;
     }
+
     try {
-      const headers = { "X-Booking-Token": accessToken };
-      const res = await fetch(`/booking/${id}`, { headers });
-      if (!res.ok) throw new Error();
-      const b = await res.json();
-      
+      const { data: booking } = await apiJson(`/booking/${encodeURIComponent(id)}`, {
+        headers: { "X-Booking-Token": accessToken },
+      });
+
       document.getElementById("loadingState").style.display = "none";
       confCard.style.display = "block";
-      
-      document.getElementById("confName").textContent = b.name;
-      document.getElementById("confDoctor").textContent = b.doctor.name;
-      document.getElementById("confDate").textContent = b.date;
-      document.getElementById("confSlot").textContent = b.timeSlot;
-      document.getElementById("confToken").textContent = `#${b.token}`;
-      
-      const st = document.getElementById("confStatus");
-      st.textContent = b.status;
-      st.className = `status-badge ${b.status}`;
-      
-      const pdfBtn = document.getElementById("downloadPdfBtn");
-      const cancelBtn = document.getElementById("cancelBookingBtn");
-      
-      if (b.status === "confirmed") {
-        pdfBtn.style.display = "inline-flex";
-        pdfBtn.onclick = () => {
-          const form = document.createElement("form");
-          form.method = "POST";
-          form.action = `/pdf/${b.id}`;
-          form.hidden = true;
+
+      document.getElementById("confName").textContent = booking.name;
+      document.getElementById("confDoctor").textContent = booking.doctor.name;
+      document.getElementById("confDate").textContent = booking.date;
+      document.getElementById("confSlot").textContent = booking.timeSlot;
+      document.getElementById("confToken").textContent = `#${booking.token}`;
+
+      const statusElement = document.getElementById("confStatus");
+      statusElement.textContent = booking.status;
+      statusElement.className = `status-badge ${booking.status}`;
+
+      const pdfButton = document.getElementById("downloadPdfBtn");
+      const cancelButton = document.getElementById("cancelBookingBtn");
+
+      if (booking.status === "confirmed") {
+        pdfButton.style.display = "inline-flex";
+        pdfButton.onclick = () => {
+          const downloadForm = document.createElement("form");
+          downloadForm.method = "POST";
+          downloadForm.action = apiUrl(`/pdf/${encodeURIComponent(booking.id)}`);
+          downloadForm.hidden = true;
 
           const tokenInput = document.createElement("input");
           tokenInput.type = "hidden";
           tokenInput.name = "accessToken";
           tokenInput.value = accessToken;
-          form.appendChild(tokenInput);
-          document.body.appendChild(form);
-          form.submit();
-          form.remove();
+
+          downloadForm.appendChild(tokenInput);
+          document.body.appendChild(downloadForm);
+          downloadForm.submit();
+          downloadForm.remove();
         };
       } else {
-        pdfBtn.style.display = "none";
-        pdfBtn.onclick = null;
+        pdfButton.style.display = "none";
+        pdfButton.onclick = null;
       }
-      
-      if (b.status === "cancelled" || b.status === "rejected") {
-        cancelBtn.style.display = "none";
+
+      if (booking.status === "cancelled" || booking.status === "rejected") {
+        cancelButton.style.display = "none";
       } else {
-        cancelBtn.style.display = "inline-flex";
-        cancelBtn.onclick = async () => {
-          if(!confirm("Are you sure you want to cancel this booking?")) return;
-          cancelBtn.disabled = true;
+        cancelButton.style.display = "inline-flex";
+        cancelButton.onclick = async () => {
+          if (!confirm("Are you sure you want to cancel this booking?")) return;
+
+          cancelButton.disabled = true;
           try {
-            const cancelRes = await fetch(`/cancel/${b.id}`, { method: "POST", headers });
-            const cancelData = await cancelRes.json();
-            if (!cancelRes.ok) throw new Error(cancelData.error);
-            showToast("Booking cancelled successfully", "success");
+            const { data } = await apiJson(`/cancel/${encodeURIComponent(booking.id)}`, {
+              method: "POST",
+              headers: { "X-Booking-Token": accessToken },
+            });
+            showToast(data.message || "Booking cancelled successfully.", "success");
             await loadBooking();
-          } catch(error) {
+          } catch (error) {
             showToast(error.message || "Cancellation failed.", "error");
           } finally {
-            cancelBtn.disabled = false;
+            cancelButton.disabled = false;
           }
         };
       }
-    } catch(error) {
+    } catch {
       document.getElementById("loadingState").style.display = "none";
       document.getElementById("errorState").style.display = "block";
     }
   };
-  
+
   loadBooking();
 }
