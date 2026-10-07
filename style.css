@@ -154,6 +154,7 @@ textarea{resize:vertical;min-height:78px}
 .tab-count.pending   {background:rgba(251,191,36,.1);color:var(--warning)}
 .tab-count.confirmed {background:rgba(52,211,153,.1);color:var(--success)}
 .tab-count.rejected  {background:rgba(248,113,113,.1);color:var(--danger)}
+.tab-count.cancelled {background:rgba(139,148,158,.1);color:var(--muted)}
 
 /* ─── Booking Cards ──────────────────────────────────────────────────────────── */
 .bookings-list{display:flex;flex-direction:column;gap:12px;max-height:520px;overflow-y:auto;padding-right:4px}

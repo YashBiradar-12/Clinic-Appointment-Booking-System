@@ -16,7 +16,21 @@
     <a href="index.html" class="view-link">← Patient Booking</a>
   </header>
 
-  <main class="page wide">
+  <main class="page" id="adminLogin">
+    <section class="card">
+      <h1 class="card-title">Admin sign in</h1>
+      <form id="adminLoginForm">
+        <div class="form-group">
+          <label for="adminPassword">Admin password</label>
+          <input type="password" id="adminPassword" required autocomplete="current-password" />
+        </div>
+        <button type="submit" class="btn btn-primary" id="adminLoginBtn">Sign in</button>
+        <p id="adminLoginError" role="alert" style="margin-top:12px;color:var(--danger)"></p>
+      </form>
+    </section>
+  </main>
+
+  <main class="page wide" id="adminPanel" hidden>
 
     <!-- ── Stats ──────────────────────────────────────────────────────────────── -->
     <div class="stats-bar">
@@ -36,12 +50,17 @@
         <div class="stat-number" id="statRejected" style="color:var(--danger)">0</div>
         <div class="stat-label">Rejected</div>
       </div>
+      <div class="stat-chip">
+        <div class="stat-number" id="statCancelled" style="color:var(--muted)">0</div>
+        <div class="stat-label">Cancelled</div>
+      </div>
     </div>
 
     <!-- ── Admin Actions ──────────────────────────────────────────────────────── -->
     <div class="action-row">
       <button class="btn btn-danger" id="callNextBtn">📢 Call Next Patient</button>
       <button class="btn btn-warning" id="resetBtn">🔄 Reset All</button>
+      <button class="btn btn-ghost" id="logoutBtn">Log out</button>
     </div>
 
     <!-- ── Tabs ───────────────────────────────────────────────────────────────── -->
@@ -54,6 +73,9 @@
       </button>
       <button class="tab-btn" data-tab="rejected">
         ❌ Rejected <span class="tab-count rejected" id="countRejected">0</span>
+      </button>
+      <button class="tab-btn" data-tab="cancelled">
+        ↩️ Cancelled <span class="tab-count cancelled" id="countCancelled">0</span>
       </button>
     </div>
 
